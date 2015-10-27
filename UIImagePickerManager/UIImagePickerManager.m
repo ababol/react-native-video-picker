@@ -1,5 +1,6 @@
 #import "UIImagePickerManager.h"
 #import "RCTConvert.h"
+#import <MobileCoreServices/MobileCoreServices.h>
 
 @interface UIImagePickerManager ()
 
@@ -50,14 +51,14 @@ RCT_EXPORT_METHOD(showImagePicker:(NSDictionary *)options callback:(RCTResponseS
     for (NSString *key in options.keyEnumerator) { // Replace default options
         [self.options setValue:options[key] forKey:key];
     }
-    
+
     NSString *title = [self.options valueForKey:@"title"];
     if ([title isEqual:[NSNull null]] || title.length == 0) {
         title = nil; // A more visually appealing UIAlertControl is displayed with a nil title rather than title = @""
     }
-    
+
     self.alertController = [UIAlertController alertControllerWithTitle:title message:nil preferredStyle:UIAlertControllerStyleActionSheet];
-    
+
     NSString *cancelTitle = [self.options valueForKey:@"cancelButtonTitle"];
     if ([cancelTitle isEqual:[NSNull null]] || cancelTitle.length == 0) {
         cancelTitle = self.defaultOptions[@"cancelButtonTitle"]; // Don't allow null or empty string cancel button title
@@ -82,7 +83,7 @@ RCT_EXPORT_METHOD(showImagePicker:(NSDictionary *)options callback:(RCTResponseS
         }];
         [self.alertController addAction:chooseFromLibraryAction];
     }
-    
+
     // Add custom buttons to action sheet
     if([self.options objectForKey:@"customButtons"] && [[self.options objectForKey:@"customButtons"] isKindOfClass:[NSDictionary class]]){
         self.customButtons = [self.options objectForKey:@"customButtons"];
@@ -93,10 +94,10 @@ RCT_EXPORT_METHOD(showImagePicker:(NSDictionary *)options callback:(RCTResponseS
             [self.alertController addAction:customAction];
         }
     }
-    
+
     dispatch_async(dispatch_get_main_queue(), ^{
         UIViewController *root = [[[[UIApplication sharedApplication] delegate] window] rootViewController];
-        
+
         /* On iPad, UIAlertController presents a popover view rather than an action sheet like on iPhone. We must provide the location
            of the location to show the popover in this case. For simplicity, we'll just display it on the bottom center of the screen
            to mimic an action sheet */
@@ -112,7 +113,7 @@ RCT_EXPORT_METHOD(showImagePicker:(NSDictionary *)options callback:(RCTResponseS
     for (NSString *key in options.keyEnumerator) { // Replace default options
         [self.options setValue:options[key] forKey:key];
     }
-    
+
     [self launchImagePicker:target];
 }
 
@@ -147,16 +148,17 @@ RCT_EXPORT_METHOD(showImagePicker:(NSDictionary *)options callback:(RCTResponseS
             break;
 #endif
         case RNImagePickerTargetLibrarySingleImage:
-            self.picker.sourceType = UIImagePickerControllerSourceTypePhotoLibrary;
+            self.picker.sourceType = UIImagePickerControllerSourceTypeSavedPhotosAlbum;
+            self.picker.mediaTypes = [NSArray arrayWithObjects:
+                                  (NSString *) kUTTypeMovie,
+                                  nil];
+            self.picker.allowsEditing = NO;
             break;
         default:
             NSLog(@"Well done: This shouldn't happen. Invalid ImagePicker target. Aborting...");
             return;
     }
 
-    if ([[self.options objectForKey:@"allowsEditing"] boolValue]) {
-        self.picker.allowsEditing = true;
-    }
     self.picker.modalPresentationStyle = UIModalPresentationCurrentContext;
     self.picker.delegate = self;
 
@@ -176,85 +178,58 @@ RCT_EXPORT_METHOD(showImagePicker:(NSDictionary *)options callback:(RCTResponseS
     dispatch_async(dispatch_get_main_queue(), ^{
         [picker dismissViewControllerAnimated:YES completion:nil];
     });
-
     /* Picked Image */
-    UIImage *image;
-    if ([[self.options objectForKey:@"allowsEditing"] boolValue]) {
-      image = [info objectForKey:UIImagePickerControllerEditedImage];
-    }
-    else {
-      image = [info objectForKey:UIImagePickerControllerOriginalImage];
-    }
+     UIImage *image;
+     image = [info objectForKey:UIImagePickerControllerMediaURL];
 
-    /* creating a temp url to be passed */
-    NSString *ImageUUID = [[NSUUID UUID] UUIDString];
-    NSString *ImageName = [ImageUUID stringByAppendingString:@".jpg"];
+     /* creating a temp url to be passed */
+     NSString *ImageUUID = [[NSUUID UUID] UUIDString];
+     NSString *ImageName = [ImageUUID stringByAppendingString:@".mov"];
 
-    // This will be the default URL
-    NSString* path = [[NSTemporaryDirectory()stringByStandardizingPath] stringByAppendingPathComponent:ImageName];
-    
-    NSDictionary *storageOptions;
-    // if storage options are provided change path to the documents directory
-    if([self.options objectForKey:@"storageOptions"] && [[self.options objectForKey:@"storageOptions"] isKindOfClass:[NSDictionary class]]){
-        // retrieve documents path
-        NSArray *paths = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES);
-        NSString *documentsDirectory = [paths objectAtIndex:0];
-        // update path to save image to documents directory
-        path = [documentsDirectory stringByAppendingPathComponent:ImageName];
+     // This will be the default URL
+     NSString* path = [[NSTemporaryDirectory()stringByStandardizingPath] stringByAppendingPathComponent:ImageName];
 
-        storageOptions = [self.options objectForKey:@"storageOptions"];
-        // if extra path is provided try to create it
-        if ([storageOptions objectForKey:@"path"]) {
-            NSString *newPath = [documentsDirectory stringByAppendingPathComponent:[storageOptions objectForKey:@"path"]];
-            NSError *error = nil;
-            [[NSFileManager defaultManager] createDirectoryAtPath:newPath withIntermediateDirectories:YES attributes:nil error:&error];
-            
-            // if there was an error do not update path
-            if (error != nil) {
-                NSLog(@"error creating directory: %@", error);
-            }
-            else {
-                path = [newPath stringByAppendingPathComponent:ImageName];
-            }
-        }
-    }
-    
-    // Rotate the image for upload to web
-    image = [self fixOrientation:image];
+     NSDictionary *storageOptions;
+     // if storage options are provided change path to the documents directory
+     if([self.options objectForKey:@"storageOptions"] && [[self.options objectForKey:@"storageOptions"] isKindOfClass:[NSDictionary class]]){
+         // retrieve documents path
+         NSArray *paths = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES);
+         NSString *documentsDirectory = [paths objectAtIndex:0];
+         // update path to save image to documents directory
+         path = [documentsDirectory stringByAppendingPathComponent:ImageName];
 
-    //If needed, downscale image
-    float maxWidth = image.size.width;
-    float maxHeight = image.size.height;
-    if ([self.options valueForKey:@"maxWidth"]) {
-        maxWidth = [[self.options valueForKey:@"maxWidth"] floatValue];
-    }
-    if ([self.options valueForKey:@"maxHeight"]) {
-        maxHeight = [[self.options valueForKey:@"maxHeight"] floatValue];
-    }
-    image = [self downscaleImageIfNecessary:image maxWidth:maxWidth maxHeight:maxHeight];
+         storageOptions = [self.options objectForKey:@"storageOptions"];
+         // if extra path is provided try to create it
+         if ([storageOptions objectForKey:@"path"]) {
+             NSString *newPath = [documentsDirectory stringByAppendingPathComponent:[storageOptions objectForKey:@"path"]];
+             NSError *error = nil;
+             [[NSFileManager defaultManager] createDirectoryAtPath:newPath withIntermediateDirectories:YES attributes:nil error:&error];
 
-    NSMutableDictionary *response = [[NSMutableDictionary alloc] init];
+             // if there was an error do not update path
+             if (error != nil) {
+                 NSLog(@"error creating directory: %@", error);
+             }
+             else {
+                 path = [newPath stringByAppendingPathComponent:ImageName];
+             }
+         }
+     }
 
-    NSData *data = UIImageJPEGRepresentation(image, [[self.options valueForKey:@"quality"] floatValue]);
-    // base64 encoded image string, unless the caller doesn't want it
-    if (![[self.options objectForKey:@"noData"] boolValue]) {
-        NSString *dataString = [data base64EncodedStringWithOptions:0];
-        [response setObject:dataString forKey:@"data"];
-    }
 
-    // file uri
-    [data writeToFile:path atomically:YES];
-    NSString *fileURL = [[NSURL fileURLWithPath:path] absoluteString];
-    if ([[storageOptions objectForKey:@"skipBackup"] boolValue]) {
-        [self addSkipBackupAttributeToItemAtPath:path];
-    }
-    [response setObject:fileURL forKey:@"uri"];
-    
-    // image orientation
-    BOOL vertical = (image.size.width < image.size.height) ? YES : NO;
-    [response setObject:@(vertical) forKey:@"isVertical"];
+     NSMutableDictionary *response = [[NSMutableDictionary alloc] init];
 
-    self.callback(@[@NO, response]);
+     NSString *fileURL = [[NSURL fileURLWithPath:path] absoluteString];
+     if ([[storageOptions objectForKey:@"skipBackup"] boolValue]) {
+         [self addSkipBackupAttributeToItemAtPath:path];
+     }
+     [response setObject:fileURL forKey:@"uri"];
+
+     NSURL *videoURL = [info objectForKey:UIImagePickerControllerMediaURL];
+     NSString *videoPath = [videoURL absoluteString];
+     [response setObject:videoPath forKey:@"videoPath"];
+
+
+     self.callback(@[@NO, response]);
 }
 
 - (void)imagePickerControllerDidCancel:(UIImagePickerController *)picker
@@ -262,7 +237,7 @@ RCT_EXPORT_METHOD(showImagePicker:(NSDictionary *)options callback:(RCTResponseS
     dispatch_async(dispatch_get_main_queue(), ^{
         [picker dismissViewControllerAnimated:YES completion:nil];
     });
-    
+
     self.callback(@[@YES, [NSNull null]]);
 }
 
@@ -302,7 +277,7 @@ RCT_EXPORT_METHOD(showImagePicker:(NSDictionary *)options callback:(RCTResponseS
     if (srcImg.imageOrientation == UIImageOrientationUp) {
         return srcImg;
     }
-    
+
     CGAffineTransform transform = CGAffineTransformIdentity;
     switch (srcImg.imageOrientation) {
         case UIImageOrientationDown:
@@ -375,7 +350,7 @@ RCT_EXPORT_METHOD(showImagePicker:(NSDictionary *)options callback:(RCTResponseS
         NSError *error = nil;
         BOOL success = [URL setResourceValue: [NSNumber numberWithBool: YES]
                                       forKey: NSURLIsExcludedFromBackupKey error: &error];
-        
+
         if(!success){
             NSLog(@"Error excluding %@ from backup %@", [URL lastPathComponent], error);
         }
