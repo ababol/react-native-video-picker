@@ -152,7 +152,9 @@ RCT_EXPORT_METHOD(showImagePicker:(NSDictionary *)options callback:(RCTResponseS
             self.picker.mediaTypes = [NSArray arrayWithObjects:
                                   (NSString *) kUTTypeMovie,
                                   nil];
-            self.picker.allowsEditing = NO;
+            self.picker.videoQuality = UIImagePickerControllerQualityType640x480;
+            self.picker.videoMaximumDuration = 15;
+            self.picker.allowsEditing = YES;
             break;
         default:
             NSLog(@"Well done: This shouldn't happen. Invalid ImagePicker target. Aborting...");
