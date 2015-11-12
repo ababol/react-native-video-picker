@@ -153,7 +153,7 @@ RCT_EXPORT_METHOD(showImagePicker:(NSDictionary *)options callback:(RCTResponseS
                                   (NSString *) kUTTypeMovie,
                                   nil];
             self.picker.videoQuality = UIImagePickerControllerQualityType640x480;
-            self.picker.videoMaximumDuration = 15;
+            self.picker.videoMaximumDuration = 30;
             self.picker.allowsEditing = YES;
             break;
         default:
